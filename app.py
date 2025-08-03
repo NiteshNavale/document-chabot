@@ -3,20 +3,24 @@ import os
 import pandas as pd
 from docx import Document
 from PyPDF2 import PdfReader
+
+# Import Groq's chat model
+from langchain_groq import ChatGroq
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
+from langchain.embeddings import OpenAIEmbeddings # You can keep this for embeddings or use a different one
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
-from langchain.chat_models import ChatOpenAI
 
-# Set up your OpenAI API key as an environment variable
-# os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY_HERE"
+# Set up your Groq API key
+# Instead of hardcoding, we'll use Streamlit's secrets management
+# os.environ["GROQ_API_KEY"] = "YOUR_GROQ_API_KEY_HERE"
 
 def extract_text_from_file(file):
-    """Extracts text from an uploaded file object."""
+    # This function remains the same as before.
     file_extension = os.path.splitext(file.name)[1].lower()
     text = ""
-    
+    # ... (rest of the function code) ...
     if file_extension == '.docx':
         doc = Document(file)
         for para in doc.paragraphs:
@@ -43,21 +47,34 @@ def extract_text_from_file(file):
     return text
 
 def get_vector_store(text):
-    """Creates a vector store from text chunks."""
+    """
+    Splits text into chunks, embeds them, and stores in a vector store.
+    Note: We are still using OpenAIEmbeddings here, as they are a common and effective choice.
+    If you want to use a different embedding model, you would need to install a different library.
+    """
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
         length_function=len
     )
     chunks = text_splitter.split_text(text)
-    
+
     embeddings = OpenAIEmbeddings()
     vector_store = FAISS.from_texts(chunks, embeddings)
     return vector_store
 
 def get_conversation_chain(vector_store):
-    """Creates a conversational Q&A chain."""
-    llm = ChatOpenAI(temperature=0.7, model_name="gpt-3.5-turbo")
+    """
+    Creates a conversational Q&A chain using the Groq chat model.
+    """
+    # Initialize the Groq LLM
+    llm = ChatGroq(
+        temperature=0.7,
+        # Replace 'mixtral-8x7b-32768' with your preferred Groq model name
+        model_name="mixtral-8x7b-32768", 
+        groq_api_key=st.secrets["GROQ_API_KEY"]
+    )
+    
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vector_store.as_retriever(),
