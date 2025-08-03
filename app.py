@@ -7,20 +7,21 @@ from PyPDF2 import PdfReader
 # Import Groq's chat model
 from langchain_groq import ChatGroq
 
+# Import Hugging Face embedding model
+from langchain_huggingface import HuggingFaceEmbeddings
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 
-# Set up your Groq API key
-# Instead of hardcoding, we'll use Streamlit's secrets management
-# os.environ["GROQ_API_KEY"] = "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"
+# Set up your Groq API key using Streamlit's secrets management
+# os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 
 def extract_text_from_file(file):
-    # This function remains the same as before.
+    """Extracts text from an uploaded file object."""
     file_extension = os.path.splitext(file.name)[1].lower()
     text = ""
-    # ... (rest of the function code) ...
+    
     if file_extension == '.docx':
         doc = Document(file)
         for para in doc.paragraphs:
@@ -48,9 +49,8 @@ def extract_text_from_file(file):
 
 def get_vector_store(text):
     """
-    Splits text into chunks, embeds them, and stores in a vector store.
-    Note: We are still using OpenAIEmbeddings here, as they are a common and effective choice.
-    If you want to use a different embedding model, you would need to install a different library.
+    Splits text into chunks, embeds them using a free Hugging Face model,
+    and stores them in a vector store.
     """
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
@@ -58,8 +58,11 @@ def get_vector_store(text):
         length_function=len
     )
     chunks = text_splitter.split_text(text)
-
-    embeddings = OpenAIEmbeddings()
+    
+    # Initialize a free Hugging Face embedding model
+    # This model will be downloaded and run in the Streamlit Cloud environment
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    
     vector_store = FAISS.from_texts(chunks, embeddings)
     return vector_store
 
@@ -67,10 +70,8 @@ def get_conversation_chain(vector_store):
     """
     Creates a conversational Q&A chain using the Groq chat model.
     """
-    # Initialize the Groq LLM
     llm = ChatGroq(
         temperature=0.7,
-        # Replace 'mixtral-8x7b-32768' with your preferred Groq model name
         model_name="mixtral-8x7b-32768", 
         groq_api_key=st.secrets["GROQ_API_KEY"]
     )
