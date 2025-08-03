@@ -14,7 +14,7 @@ from langchain.chains import ConversationalRetrievalChain
 
 # Set up your Groq API key
 # Instead of hardcoding, we'll use Streamlit's secrets management
-# os.environ["GROQ_API_KEY"] = "YOUR_GROQ_API_KEY_HERE"
+# os.environ["GROQ_API_KEY"] = "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"
 
 def extract_text_from_file(file):
     # This function remains the same as before.
