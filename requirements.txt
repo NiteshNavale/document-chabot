@@ -2,6 +2,7 @@ streamlit
 langchain
 langchain-groq
 langchain-huggingface
+langchain-community  # Add this line
 python-docx
 PyPDF2
 pandas
