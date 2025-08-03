@@ -4,18 +4,16 @@ import pandas as pd
 from docx import Document
 from PyPDF2 import PdfReader
 
-# Import Groq's chat model
+# Import Groq's chat model and other core langchain components
 from langchain_groq import ChatGroq
-
-# Import Hugging Face embedding model
 from langchain_huggingface import HuggingFaceEmbeddings
-
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain.chains import ConversationalRetrievalChain
 
-# Set up your Groq API key using Streamlit's secrets management
-# os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+# New imports for the refined chain type
+from langchain.chains.Youtubeing import load_qa_chain
+from langchain_core.prompts import PromptTemplate
+from langchain.chains import ConversationalRetrievalChain
 
 def extract_text_from_file(file):
     """Extracts text from an uploaded file object."""
@@ -60,7 +58,6 @@ def get_vector_store(text):
     chunks = text_splitter.split_text(text)
     
     # Initialize a free Hugging Face embedding model
-    # This model will be downloaded and run in the Streamlit Cloud environment
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
     vector_store = FAISS.from_texts(chunks, embeddings)
@@ -68,7 +65,8 @@ def get_vector_store(text):
 
 def get_conversation_chain(vector_store):
     """
-    Creates a conversational Q&A chain using the Groq chat model.
+    Creates a conversational Q&A chain using the Groq chat model
+    and a custom refine chain.
     """
     llm = ChatGroq(
         temperature=0.7,
@@ -76,12 +74,41 @@ def get_conversation_chain(vector_store):
         groq_api_key=st.secrets["GROQ_API_KEY"]
     )
     
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vector_store.as_retriever(),
-        return_source_documents=True,
-        combine_docs_chain_kwargs={"chain_type": "refine"}
+    # Define the prompts for the refine chain
+    question_prompt_template = """
+    Use the following context to answer the question. If you don't know the answer, just say that you don't know, don't try to make up an answer.
+    {context}
+
+    Question: {question}
+    """
+    question_prompt = PromptTemplate.from_template(question_prompt_template)
+
+    refine_prompt_template = """
+    The original question is as follows: {question}
+    We have provided an existing answer: {existing_answer}
+    We have the opportunity to refine the existing answer with some more context below.
+    ------------
+    {context}
+    ------------
+    Given the new context, refine the original answer to better answer the question. If the context isn't useful, return the original answer.
+    """
+    refine_prompt = PromptTemplate.from_template(refine_prompt_template)
+    
+    # Create the refine document chain
+    doc_chain = load_qa_chain(
+        llm,
+        chain_type="refine",
+        question_prompt=question_prompt,
+        refine_prompt=refine_prompt,
     )
+    
+    # Create the ConversationalRetrievalChain by passing the components
+    conversation_chain = ConversationalRetrievalChain(
+        retriever=vector_store.as_retriever(),
+        question_generator=llm,
+        combine_docs_chain=doc_chain,
+    )
+    
     return conversation_chain
 
 def handle_user_input(user_question):
