@@ -8,7 +8,7 @@ from PyPDF2 import PdfReader
 from langchain_groq import ChatGroq
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings # You can keep this for embeddings or use a different one
+from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 
