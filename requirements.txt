@@ -1,6 +1,7 @@
 streamlit
 langchain
 langchain-groq
+langchain-openai  # Add this line
 python-docx
 PyPDF2
 pandas
