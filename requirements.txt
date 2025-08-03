@@ -2,8 +2,9 @@ streamlit
 langchain
 langchain-groq
 langchain-huggingface
-langchain-community  # Add this line
+langchain-community
 python-docx
 PyPDF2
 pandas
 faiss-cpu
+sentence-transformers
