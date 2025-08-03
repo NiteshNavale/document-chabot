@@ -122,7 +122,7 @@ def handle_user_input(user_question):
 
 def main():
     st.set_page_config(page_title="Document Chatbot", page_icon=":books:")
-    st.title("Chat with Your Documents")
+    st.title("My Document Chatbot")
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
