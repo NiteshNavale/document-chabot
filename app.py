@@ -53,8 +53,8 @@ def get_vector_store(text):
     and stores them in a vector store.
     """
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
+        chunk_size=500,
+        chunk_overlap=100,
         length_function=len
     )
     chunks = text_splitter.split_text(text)
