@@ -25,16 +25,17 @@ load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 # --- UI STYLING (CSS) ---
-# UPDATED: Corrected the background image URL and added background-size for better control.
+# UPDATED: Replaced the image URL with a pure CSS gradient pattern.
+# This creates a subtle dot pattern that gives a textured feel without any external files.
 st.markdown("""
 <style>
     /* --- Main App Styling --- */
-    /* Set a background image like WhatsApp */
+    /* Set a background using CSS gradients to create a subtle pattern */
     .stApp {
-        background-color: #e5ddd5; /* Fallback color */
-        background-image: url("https://i.imgur.com/y4nWgV2.png"); /* Correct, direct link to an image pattern */
-        background-size: 300px 300px; /* Control the size of the repeating pattern */
-        background-repeat: repeat;
+        background-color: #e5ddd5; /* WhatsApp-like fallback color */
+        /* This creates a tiny, semi-transparent dot and repeats it */
+        background-image: radial-gradient(circle, rgba(0,0,0,0.05) 1px, transparent 1px);
+        background-size: 15px 15px; /* Adjust size to make the pattern more/less dense */
         font-family: 'Helvetica Neue', sans-serif;
     }
 
