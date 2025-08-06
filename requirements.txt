@@ -1,18 +1,22 @@
+# Core application framework
 streamlit
+
+# LangChain and AI components
 langchain
-langchain-groq
-langchain-huggingface
+langchain-core
 langchain-community
+langchain-groq
+
+# Document loaders
+pypdf
 python-docx
-PyPDF2
+python-pptx
+openpyxl
+
+# Data handling and vector store
 pandas
 faiss-cpu
 sentence-transformers
-groq
+
+# Environment variables
 python-dotenv
-pypdf
-streamlit
-python-dotenv
-PyPDF2
-python-pptx
-openpyxl
