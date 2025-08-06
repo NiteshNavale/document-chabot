@@ -1,159 +1,274 @@
 import streamlit as st
+from dotenv import load_dotenv
 import os
 import pandas as pd
-from docx import Document
+from io import StringIO
 from PyPDF2 import PdfReader
-
-# Import Groq's chat model and other core langchain components
-from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
+import docx
+from pptx import Presentation
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.chains import ConversationalRetrievalChain
-
-# Correct imports for the refined chain type
-from langchain.chains.Youtubeing import load_qa_chain
-
+from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
-def extract_text_from_file(file):
-    """Extracts text from an uploaded file object."""
-    file_extension = os.path.splitext(file.name)[1].lower()
-    text = ""
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="NitBot",
+    page_icon="🤖",
+    layout="wide"
+)
+
+# --- ENVIRONMENT AND API KEY LOADING ---
+load_dotenv()
+groq_api_key = os.getenv("GROQ_API_KEY")
+
+# --- UI STYLING (CSS) ---
+st.markdown("""
+<style>
+    /* --- Main App Styling --- */
+    /* Set a background image like WhatsApp */
+    .stApp {
+        background-color: #e5ddd5; /* Fallback color */
+        background-image: url("https://i.imgur.com/p2a9a4G.png"); /* Subtle pattern */
+        background-repeat: repeat;
+        font-family: 'Helvetica Neue', sans-serif;
+    }
+
+    /* --- Sidebar Styling --- */
+    .st-emotion-cache-16txtl3 {
+        background-color: #F8F9FA;
+        border-right: 1px solid #D1D7DB;
+    }
+
+    /* --- Create the Chat Window "Card" --- */
+    /* This is the main container for the chat interface */
+    .st-emotion-cache-1y4p8pa {
+        padding: 2rem 3rem;
+        background-color: #F0F2F6; /* Light grey background for the chat area */
+        border-radius: 1rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        margin: 1rem;
+    }
+
+    /* --- Chat Header Styling --- */
+    .st-emotion-cache-1yyk08v {
+        background-color: #FFFFFF;
+        padding: 1rem;
+        border-radius: 10px 10px 0 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-bottom: 1px solid #E0E0E0;
+        text-align: center;
+        font-weight: 600;
+        color: #1E1E1E;
+    }
+
+    /* --- WhatsApp-like Chat Bubbles --- */
+    [data-testid="stChatMessages"] {
+        display: flex;
+        flex-direction: column;
+        padding: 1rem 0;
+    }
+
+    /* General chat message container styling */
+    [data-testid="stChatMessage"] {
+        border-radius: 12px; /* Softer corners */
+        padding: 10px 15px;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 1px 2px 0 rgba(0,0,0,0.15); /* Add depth */
+        border: none;
+    }
+
+    /* User message styling (Right-aligned, bubble-like) */
+    [data-testid="stChatMessage"]:has([data-testid="stAvatarIcon-user"]) {
+        background-color: #dcf8c6; /* WhatsApp's outgoing message green */
+        align-self: flex-end;
+        margin-left: auto;
+        width: fit-content;
+        max-width: 65%;
+    }
+
+    /* Bot message styling (Left-aligned, full-width) */
+    [data-testid="stChatMessage"]:has([data-testid="stAvatarIcon-assistant"]) {
+        background-color: #ffffff; /* White */
+        align-self: flex-start;
+        margin-right: auto;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Remove the avatar icons */
+    [data-testid="stAvatarIcon-user"], [data-testid="stAvatarIcon-assistant"] {
+        display: none;
+    }
     
-    if file_extension == '.docx':
-        doc = Document(file)
-        for para in doc.paragraphs:
-            text += para.text + "\n"
-    elif file_extension == '.pdf':
-        try:
-            reader = PdfReader(file)
-            for page in reader.pages:
-                text += page.extract_text() or ""
-        except Exception as e:
-            st.error(f"Error reading PDF: {e}")
-            text = ""
-    elif file_extension in ['.xlsx', '.xls', '.csv']:
-        try:
-            df = pd.read_excel(file) if file_extension in ['.xlsx', '.xls'] else pd.read_csv(file)
-            text = df.to_string(index=False)
-        except Exception as e:
-            st.error(f"Error reading Excel/CSV: {e}")
-            text = ""
-    else:
-        st.warning(f"Unsupported file type: {file_extension}")
-        text = ""
+    /* Table styling */
+    .stDataFrame, .stTable {
+        border-radius: 8px;
+        box-shadow: none; /* Remove extra shadow as it's in a bubble */
+        border: 1px solid #E0E0E0;
+    }
 
+    /* Title styling (for the very top title, not the chat header) */
+    h1 {
+        text-align: center;
+        color: #4A4A4A;
+        padding-bottom: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- CORE FUNCTIONS (No changes needed) ---
+
+def get_docs_text(docs):
+    text = ""
+    for doc in docs:
+        try:
+            doc.seek(0)
+            file_extension = os.path.splitext(doc.name)[1].lower()
+            if file_extension == '.pdf':
+                pdf_reader = PdfReader(doc)
+                for page in pdf_reader.pages:
+                    page_text = page.extract_text()
+                    if page_text: text += page_text + "\n"
+            elif file_extension == '.docx':
+                document = docx.Document(doc)
+                for para in document.paragraphs: text += para.text + "\n"
+            elif file_extension == '.pptx':
+                prs = Presentation(doc)
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"): text += shape.text + "\n"
+            elif file_extension == '.txt':
+                text += doc.getvalue().decode("utf-8", errors='ignore') + "\n"
+            elif file_extension == '.csv':
+                try:
+                    common_kwargs = {'on_bad_lines': 'skip', 'engine': 'python'}
+                    doc.seek(0)
+                    try:
+                        df = pd.read_csv(doc, encoding='utf-8', **common_kwargs)
+                    except UnicodeDecodeError:
+                        doc.seek(0)
+                        df = pd.read_csv(doc, encoding='latin-1', **common_kwargs)
+                    text += df.to_string(index=False) + "\n\n"
+                except Exception as e:
+                    st.warning(f"Could not parse CSV '{doc.name}' as a table. Reading as raw text. Error: {e}")
+                    doc.seek(0)
+                    text += doc.getvalue().decode("utf-8", errors='ignore') + "\n"
+        except Exception as e:
+            st.error(f"An unexpected error occurred while processing {doc.name}: {e}")
+            continue
     return text
 
-def get_vector_store(text):
-    """
-    Splits text into chunks, embeds them using a free Hugging Face model,
-    and stores them in a vector store.
-    """
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100,
-        length_function=len
-    )
-    chunks = text_splitter.split_text(text)
-    
-    # Initialize a free Hugging Face embedding model
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
-    vector_store = FAISS.from_texts(chunks, embeddings)
-    return vector_store
+def get_text_chunks(text):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    return text_splitter.split_text(text)
 
-def get_conversation_chain(vector_store):
-    """
-    Creates a conversational Q&A chain using the Groq chat model
-    and a custom refine chain.
-    """
-    llm = ChatGroq(
-        temperature=0.7,
-        model_name="mixtral-8x7b-32768", 
-        groq_api_key=st.secrets["GROQ_API_KEY"]
-    )
-    
-    # Define the prompts for the refine chain
-    question_prompt_template = """
-    Use the following context to answer the question. If you don't know the answer, just say that you don't know, don't try to make up an answer.
+def get_vector_store(text_chunks):
+    try:
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
+        vector_store.save_local("faiss_index")
+        return True
+    except Exception as e:
+        st.error(f"Error creating vector store: {e}")
+        return False
+
+def get_conversational_chain():
+    prompt_template = """
+    You are an expert assistant. You will be given a question and a set of context extracted from a document.
+    Synthesize this information into a single, coherent final response. Your goal is to be as helpful as possible.
+    Base your answer ONLY on the context provided.
+    CRITICAL INSTRUCTION: If the user's question asks for a comparison, a list of items, a summary of features,
+    or any other structured data that would benefit from a tabular format, YOUR FINAL ANSWER MUST be formatted as a Markdown table.
+    Use columns and rows appropriately. Do not just list items; structure them in a table.
+    For all other questions, provide a clear, well-formatted text answer.
+    CONTEXT:
     {context}
-
-    Question: {question}
+    QUESTION:
+    {question}
+    Final Answer:
     """
-    question_prompt = PromptTemplate.from_template(question_prompt_template)
+    model = ChatGroq(model_name="llama3-8b-8192", temperature=0.2, api_key=groq_api_key)
+    prompt = PromptTemplate.from_template(prompt_template)
+    return prompt | model | StrOutputParser()
 
-    refine_prompt_template = """
-    The original question is as follows: {question}
-    We have provided an existing answer: {existing_answer}
-    We have the opportunity to refine the existing answer with some more context below.
-    ------------
-    {context}
-    ------------
-    Given the new context, refine the original answer to better answer the question. If the context isn't useful, return the original answer.
-    """
-    refine_prompt = PromptTemplate.from_template(refine_prompt_template)
-    
-    # Create the refine document chain
-    doc_chain = load_qa_chain(
-        llm,
-        chain_type="refine",
-        question_prompt=question_prompt,
-        refine_prompt=refine_prompt,
-    )
-    
-    # Create the ConversationalRetrievalChain by passing the components
-    conversation_chain = ConversationalRetrievalChain(
-        retriever=vector_store.as_retriever(),
-        question_generator=llm,
-        combine_docs_chain=doc_chain,
-    )
-    
-    return conversation_chain
-
-def handle_user_input(user_question):
-    """Handles user questions and displays the chatbot's response."""
-    if "conversation" in st.session_state and "chat_history" in st.session_state:
-        response = st.session_state.conversation({'question': user_question, 'chat_history': st.session_state.chat_history})
-        st.session_state.chat_history = response['chat_history']
-        st.write("You:", user_question)
-        st.write("Bot:", response['answer'])
+# --- MAIN APP LAYOUT ---
 
 def main():
-    st.set_page_config(page_title="Document Chatbot", page_icon=":books:")
-    st.title("My Document Chatbot")
-
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
+    st.title("🤖 NitBot: Your Intelligent Document Assistant")
+    
+    # --- SESSION STATE INITIALIZATION ---
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    if "vector_store" not in st.session_state:
+        st.session_state.vector_store = None
 
-
+    # --- SIDEBAR ---
     with st.sidebar:
-        st.subheader("Upload your documents")
-        uploaded_file = st.file_uploader(
-            "Upload files and click 'Process'",
-            type=["pdf", "docx", "xlsx", "csv"],
-            accept_multiple_files=False
-        )
-        if st.button("Process Document"):
-            if uploaded_file:
-                with st.spinner("Processing..."):
-                    raw_text = extract_text_from_file(uploaded_file)
-                    if raw_text:
-                        vector_store = get_vector_store(raw_text)
-                        st.session_state.conversation = get_conversation_chain(vector_store)
-                        st.success("Document processed successfully!")
-                    else:
-                        st.error("Failed to process the document.")
-            else:
-                st.error("Please upload a document first.")
-    
-    st.subheader("Ask a question about your document:")
-    user_question = st.text_input("Your question:")
-    if user_question:
-        handle_user_input(user_question)
+        st.header("🛠️ Setup Panel")
+        if not groq_api_key:
+            st.error("GROQ_API_KEY not found. Please set it in your environment.")
+            st.stop()
+        
+        st.subheader("1. Upload Your Documents")
+        uploaded_docs = st.file_uploader("Supports PDF, DOCX, PPTX, TXT, CSV", accept_multiple_files=True, type=['pdf', 'docx', 'pptx', 'txt', 'csv'])
 
-if __name__ == '__main__':
+        st.subheader("2. Process Documents")
+        if st.button("Process", use_container_width=True):
+            if uploaded_docs:
+                with st.spinner("Reading, chunking, and embedding... please wait."):
+                    raw_text = get_docs_text(uploaded_docs)
+                    if not raw_text.strip():
+                        st.warning("No text extracted. Check document content or format.")
+                    else:
+                        text_chunks = get_text_chunks(raw_text)
+                        if get_vector_store(text_chunks):
+                            embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+                            st.session_state.vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+                            st.session_state.chat_history = [] 
+                            st.success("Knowledge base is ready!")
+                            st.rerun() 
+            else:
+                st.warning("Please upload at least one document.")
+
+    # --- MAIN CHAT INTERFACE ---
+    st.header("💬 Chat with NitBot")
+    if st.session_state.vector_store is None:
+        st.info("Please process your documents in the sidebar to begin the chat.")
+
+    # Display chat history from session state
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Handle user input and streaming response
+    if user_question := st.chat_input("Ask a question about your documents..."):
+        if st.session_state.vector_store is None:
+            st.warning("Please upload and process documents before asking a question.")
+            st.stop()
+        
+        st.session_state.chat_history.append({"role": "user", "content": user_question})
+        with st.chat_message("user"):
+            st.markdown(user_question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    retriever = st.session_state.vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+                    docs = retriever.invoke(user_question)
+                    context = "\n\n---\n\n".join([doc.page_content for doc in docs])
+                    chain = get_conversational_chain()
+                    full_response = st.write_stream(chain.stream({
+                        "context": context,
+                        "question": user_question
+                    }))
+                    st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+                except Exception as e:
+                    error_message = f"An error occurred: {e}"
+                    st.error(error_message)
+                    st.session_state.chat_history.append({"role": "assistant", "content": error_message})
+
+if __name__ == "__main__":
     main()
