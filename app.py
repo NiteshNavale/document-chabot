@@ -25,15 +25,11 @@ load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 # --- UI STYLING (CSS) ---
-# UPDATED: Replaced the image URL with a pure CSS gradient pattern.
-# This creates a subtle dot pattern that gives a textured feel without any external files.
 st.markdown("""
 <style>
     /* --- Main App Styling --- */
-    /* Set a background using CSS gradients to create a subtle pattern */
     .stApp {
         background-color: #e5ddd5; /* WhatsApp-like fallback color */
-        /* This creates a tiny, semi-transparent dot and repeats it */
         background-image: radial-gradient(circle, rgba(0,0,0,0.05) 1px, transparent 1px);
         background-size: 15px 15px; /* Adjust size to make the pattern more/less dense */
         font-family: 'Helvetica Neue', sans-serif;
@@ -46,10 +42,9 @@ st.markdown("""
     }
 
     /* --- Create the Chat Window "Card" --- */
-    /* This is the main container for the chat interface */
     .st-emotion-cache-1y4p8pa {
         padding: 2rem 3rem;
-        background-color: #F0F2F6; /* Light grey background for the chat area */
+        background-color: #F0F2F6;
         border-radius: 1rem;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         margin: 1rem;
@@ -76,25 +71,25 @@ st.markdown("""
 
     /* General chat message container styling */
     [data-testid="stChatMessage"] {
-        border-radius: 12px; /* Softer corners */
+        border-radius: 12px;
         padding: 10px 15px;
         margin-bottom: 0.75rem;
-        box-shadow: 0 1px 2px 0 rgba(0,0,0,0.15); /* Add depth */
+        box-shadow: 0 1px 2px 0 rgba(0,0,0,0.15);
         border: none;
     }
 
-    /* User message styling (Right-aligned, bubble-like) */
+    /* User message styling */
     [data-testid="stChatMessage"]:has([data-testid="stAvatarIcon-user"]) {
-        background-color: #dcf8c6; /* WhatsApp's outgoing message green */
+        background-color: #dcf8c6;
         align-self: flex-end;
         margin-left: auto;
         width: fit-content;
         max-width: 65%;
     }
 
-    /* Bot message styling (Left-aligned, full-width) */
+    /* Bot message styling */
     [data-testid="stChatMessage"]:has([data-testid="stAvatarIcon-assistant"]) {
-        background-color: #ffffff; /* White */
+        background-color: #ffffff;
         align-self: flex-start;
         margin-right: auto;
         width: 100%;
@@ -109,11 +104,11 @@ st.markdown("""
     /* Table styling */
     .stDataFrame, .stTable {
         border-radius: 8px;
-        box-shadow: none; /* Remove extra shadow as it's in a bubble */
+        box-shadow: none;
         border: 1px solid #E0E0E0;
     }
 
-    /* Title styling (for the very top title, not the chat header) */
+    /* Title styling */
     h1 {
         text-align: center;
         color: #4A4A4A;
@@ -122,8 +117,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CORE FUNCTIONS (No changes needed) ---
+# --- CORE FUNCTIONS ---
 
+# UPDATED: Added logic to read .xlsx files using pandas
 def get_docs_text(docs):
     text = ""
     for doc in docs:
@@ -145,6 +141,26 @@ def get_docs_text(docs):
                         if hasattr(shape, "text"): text += shape.text + "\n"
             elif file_extension == '.txt':
                 text += doc.getvalue().decode("utf-8", errors='ignore') + "\n"
+            
+            # --- NEW: Added logic for Excel files ---
+            elif file_extension in ['.xlsx', '.xls']:
+                try:
+                    # Use pandas ExcelFile to access all sheets
+                    xls = pd.ExcelFile(doc, engine='openpyxl')
+                    for sheet_name in xls.sheet_names:
+                        # Add sheet name as a header for context
+                        text += f"\n--- Content of sheet: {sheet_name} ---\n\n"
+                        # Read each sheet into a DataFrame
+                        df = pd.read_excel(xls, sheet_name=sheet_name)
+                        # Convert DataFrame to a string and append
+                        text += df.to_string(index=False) + "\n\n"
+                except Exception as e:
+                    st.warning(f"Could not parse Excel file '{doc.name}'. Error: {e}")
+                    # Fallback to reading as raw text if parsing fails
+                    doc.seek(0)
+                    text += doc.getvalue().decode("utf-8", errors='ignore') + "\n"
+            # --- End of new logic ---
+            
             elif file_extension == '.csv':
                 try:
                     common_kwargs = {'on_bad_lines': 'skip', 'engine': 'python'}
@@ -216,7 +232,8 @@ def main():
             st.stop()
         
         st.subheader("1. Upload Your Documents")
-        uploaded_docs = st.file_uploader("Supports PDF, DOCX, PPTX, TXT, CSV", accept_multiple_files=True, type=['pdf', 'docx', 'pptx', 'txt', 'csv'])
+        # UPDATED: Added 'xlsx' to the list of accepted file types
+        uploaded_docs = st.file_uploader("Supports PDF, DOCX, PPTX, TXT, CSV, XLSX", accept_multiple_files=True, type=['pdf', 'docx', 'pptx', 'txt', 'csv', 'xlsx', 'xls'])
 
         st.subheader("2. Process Documents")
         if st.button("Process", use_container_width=True):
