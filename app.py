@@ -25,13 +25,15 @@ load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 # --- UI STYLING (CSS) ---
+# UPDATED: Corrected the background image URL and added background-size for better control.
 st.markdown("""
 <style>
     /* --- Main App Styling --- */
     /* Set a background image like WhatsApp */
     .stApp {
         background-color: #e5ddd5; /* Fallback color */
-        background-image: url("https://i.imgur.com/p2a9a4G.png"); /* Subtle pattern */
+        background-image: url("https://i.imgur.com/y4nWgV2.png"); /* Correct, direct link to an image pattern */
+        background-size: 300px 300px; /* Control the size of the repeating pattern */
         background-repeat: repeat;
         font-family: 'Helvetica Neue', sans-serif;
     }
